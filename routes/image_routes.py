@@ -1,9 +1,6 @@
 from services.log_service import create_log
 from flask import Blueprint, request, jsonify, send_file
-from services.image_steganography import (
-    encode_message,
-    decode_message
-)
+from services.image_steganography import encode_message, decode_message
 
 import os
 import uuid
@@ -36,57 +33,43 @@ def encode():
         print("USERNAME:", username)
 
         if not image:
-            return jsonify({
-                "success": False,
-                "message": "Image is required"
-            }), 400
+            return jsonify({"success": False, "message": "Image is required"}), 400
 
         if not secret_message:
-            return jsonify({
-                "success": False,
-                "message": "Secret message is required"
-            }), 400
+            return (
+                jsonify({"success": False, "message": "Secret message is required"}),
+                400,
+            )
 
         image_name = f"{uuid.uuid4()}.png"
 
-        input_path = os.path.join(
-            UPLOAD_FOLDER,
-            image_name
-        )
+        input_path = os.path.join(UPLOAD_FOLDER, image_name)
 
-        output_path = os.path.join(
-            ENCODED_FOLDER,
-            image_name
-        )
+        output_path = os.path.join(ENCODED_FOLDER, image_name)
 
         image.save(input_path)
 
-        encode_message(
-            input_path,
-            secret_message,
-            output_path,
-            password
-        )
+        file_size = round(os.path.getsize(input_path) / (1024 * 1024), 2)
+
+        encode_message(input_path, secret_message, output_path, password)
 
         if user_id and username:
             create_log(
                 user_id=user_id,
                 username=username,
                 operation="encode",
-                file_type="image"
+                file_type="image",
+                file_name=image.filename,
+                status="Success",
+                file_size=f"{file_size} MB",
             )
 
         return send_file(
-            output_path,
-            as_attachment=True,
-            download_name="encoded_image.png"
+            output_path, as_attachment=True, download_name="encoded_image.png"
         )
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # =========================
@@ -104,40 +87,30 @@ def decode():
         username = request.form.get("username")
 
         if not image:
-            return jsonify({
-                "success": False,
-                "message": "Image is required"
-            }), 400
+            return jsonify({"success": False, "message": "Image is required"}), 400
 
         image_name = f"{uuid.uuid4()}.png"
 
-        image_path = os.path.join(
-            UPLOAD_FOLDER,
-            image_name
-        )
+        image_path = os.path.join(UPLOAD_FOLDER, image_name)
 
         image.save(image_path)
 
-        secret_message = decode_message(
-            image_path,
-            password
-        )
+        file_size = round(os.path.getsize(image_path) / (1024 * 1024), 2)
+
+        secret_message = decode_message(image_path, password)
 
         if user_id and username:
             create_log(
                 user_id=user_id,
                 username=username,
                 operation="decode",
-                file_type="image"
+                file_type="image",
+                file_name=image.filename,
+                status="Success",
+                file_size=f"{file_size} MB"
             )
 
-        return jsonify({
-            "success": True,
-            "message": secret_message
-        })
+        return jsonify({"success": True, "message": secret_message})
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500

@@ -1,8 +1,20 @@
+# Python
 venv/
-.env
 __pycache__/
-*.pyc
-uploads/*
-encoded/*
-decoded/*
-temp/*
+
+# Generated media
+uploads/
+uploads_audio/
+uploads_video/
+
+encoded/
+encoded_audio/
+encoded_video/
+
+*.wav
+*.mp4
+*.m4a
+*.avi
+
+# Node
+node_modules/

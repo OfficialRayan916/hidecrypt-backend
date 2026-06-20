@@ -1,9 +1,6 @@
 from services.log_service import create_log
 from flask import Blueprint, request, jsonify, send_file
-from services.audio_steganography import (
-    encode_audio,
-    decode_audio
-)
+from services.audio_steganography import encode_audio, decode_audio
 
 import os
 import uuid
@@ -34,61 +31,45 @@ def encode():
         password = request.form.get("password")
 
         if not audio:
-            return jsonify({
-                "success": False,
-                "message": "Audio file is required"
-            }), 400
+            return jsonify({"success": False, "message": "Audio file is required"}), 400
 
         if not secret_message:
-            return jsonify({
-                "success": False,
-                "message": "Secret message is required"
-            }), 400
+            return (
+                jsonify({"success": False, "message": "Secret message is required"}),
+                400,
+            )
 
-        extension = os.path.splitext(
-            audio.filename
-        )[1]
+        extension = os.path.splitext(audio.filename)[1]
 
         audio_name = f"{uuid.uuid4()}{extension}"
 
-        input_path = os.path.join(
-            UPLOAD_FOLDER,
-            audio_name
-        )
+        input_path = os.path.join(UPLOAD_FOLDER, audio_name)
 
-        output_path = os.path.join(
-            ENCODED_FOLDER,
-            audio_name
-        )
+        output_path = os.path.join(ENCODED_FOLDER, audio_name)
 
         audio.save(input_path)
 
-        encode_audio(
-            input_path,
-            secret_message,
-            output_path,
-            password
-        )
+        file_size = round(os.path.getsize(input_path) / (1024 * 1024), 2)
+
+        encode_audio(input_path, secret_message, output_path, password)
 
         if user_id and username:
             create_log(
                 user_id=user_id,
                 username=username,
                 operation="encode",
-                file_type="audio"
+                file_type="audio",
+                file_name="audio.filename",
+                status="Success",
+                file_size=f"{file_size} MB",
             )
 
         return send_file(
-            output_path,
-            as_attachment=True,
-            download_name="encoded_audio.wav"
+            output_path, as_attachment=True, download_name="encoded_audio.wav"
         )
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # =========================
@@ -107,44 +88,32 @@ def decode():
         username = request.form.get("username")
 
         if not audio:
-            return jsonify({
-                "success": False,
-                "message": "Audio file is required"
-            }), 400
+            return jsonify({"success": False, "message": "Audio file is required"}), 400
 
-        extension = os.path.splitext(
-            audio.filename
-        )[1]
+        extension = os.path.splitext(audio.filename)[1]
 
         audio_name = f"{uuid.uuid4()}{extension}"
 
-        audio_path = os.path.join(
-            UPLOAD_FOLDER,
-            audio_name
-        )
+        audio_path = os.path.join(UPLOAD_FOLDER, audio_name)
 
         audio.save(audio_path)
 
-        secret_message = decode_audio(
-            audio_path,
-            password
-        )
+        file_size = round(os.path.getsize(audio_path) / (1024 * 1024), 2)
+
+        secret_message = decode_audio(audio_path, password)
 
         if user_id and username:
             create_log(
                 user_id=user_id,
                 username=username,
                 operation="decode",
-                file_type="audio"
+                file_type="audio",
+                file_name="audio.filename",
+                status="Success",
+                file_size=f"{file_size} MB",
             )
 
-        return jsonify({
-            "success": True,
-            "message": secret_message
-        })
+        return jsonify({"success": True, "message": secret_message})
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500

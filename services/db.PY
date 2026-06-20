@@ -20,5 +20,6 @@ def get_db():
 db = get_db()
 users_collection = db["users"]
 logs_collection = db["logs"]
+auth_logs_collection = db["auth_logs"]
 
 print("MongoDB Connected Successfully!")
