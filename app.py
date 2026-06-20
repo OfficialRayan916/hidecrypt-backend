@@ -15,7 +15,13 @@ app = Flask(__name__)
 # CORS Configuration
 CORS(
     app,
-    resources={r"/*": {"origins": ["http://localhost:3000"]}},
+    resources={
+        r"/*": {
+            "origins": [
+                "https://hidecrypt-git-main-rayan-ahmed-s-projects1.vercel.app/"
+            ]
+        }
+    },
     supports_credentials=True,
 )
 
