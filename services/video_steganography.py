@@ -31,7 +31,8 @@ def convert_to_mp4(input_file):
 # ENCODE VIDEO
 # =========================
 def encode_video(input_video, secret_message, output_video, password=None):
-
+    
+    print("ENCODE 1")
     input_video = convert_to_mp4(input_video)
 
     temp_dir = tempfile.mkdtemp()
@@ -39,10 +40,13 @@ def encode_video(input_video, secret_message, output_video, password=None):
     frame_path = os.path.join(temp_dir, "frame.png")
 
     encoded_frame_path = os.path.join(temp_dir, "encoded_frame.png")
-
+    
+    print("ENCODE 2")
     cap = cv2.VideoCapture(input_video)
 
+    print("ENCODE 3")
     success, frame = cap.read()
+    print("ENCODE 4")
 
     if not success:
         cap.release()
