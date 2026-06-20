@@ -18,7 +18,7 @@ CORS(
     resources={
         r"/*": {
             "origins": [
-                "https://hidecrypt-git-main-rayan-ahmed-s-projects1.vercel.app/"
+                "https://hidecrypt-git-main-rayan-ahmed-s-projects1.vercel.app"
             ]
         }
     },
