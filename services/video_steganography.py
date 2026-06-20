@@ -169,9 +169,9 @@ def decode_video(
     password=None
 ):
 
-    input_video = convert_to_mp4(
-        input_video
-    )
+    # input_video = convert_to_mp4(
+    #     input_video
+    # )
 
     temp_dir = tempfile.mkdtemp()
 
