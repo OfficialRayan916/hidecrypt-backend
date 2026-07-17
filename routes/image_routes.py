@@ -1,6 +1,9 @@
 from services.log_service import create_log
 from flask import Blueprint, request, jsonify, send_file
-from services.image_steganography import encode_message, decode_message
+from services.image_steganography import (
+    encode_payload,
+    decode_payload,
+)
 
 import os
 import uuid
@@ -23,10 +26,18 @@ def encode():
     try:
 
         image = request.files.get("image")
+        payload_type = request.form.get("payload_type")
+
         secret_message = request.form.get("message")
 
+        secret_image = request.files.get("secret_image")
+
+        secret_audio = request.files.get("secret_audio")
+
         user_id = request.form.get("user_id")
+
         username = request.form.get("username")
+
         password = request.form.get("password")
 
         print("USER ID:", user_id)
@@ -35,11 +46,23 @@ def encode():
         if not image:
             return jsonify({"success": False, "message": "Image is required"}), 400
 
-        if not secret_message:
-            return (
-                jsonify({"success": False, "message": "Secret message is required"}),
-                400,
-            )
+        if payload_type == "text" and not secret_message:
+            return jsonify({
+                "success": False,
+                "message": "Secret message is required"
+            }), 400
+
+        if payload_type == "image" and not secret_image:
+            return jsonify({
+                "success": False,
+                "message": "Secret image is required"
+            }), 400
+
+        if payload_type == "audio" and not secret_audio:
+            return jsonify({
+                "success": False,
+                "message": "Secret audio is required"
+            }), 400
 
         image_name = f"{uuid.uuid4()}.png"
 
@@ -51,7 +74,29 @@ def encode():
 
         file_size = round(os.path.getsize(input_path) / (1024 * 1024), 2)
 
-        encode_message(input_path, secret_message, output_path, password)
+        if payload_type == "text":
+
+            encode_payload(
+                image_path=input_path,
+                payload_type="text",
+                output_path=output_path,
+                password=password,
+                text=secret_message
+            )
+
+        elif payload_type == "image":
+
+            return jsonify({
+                "success": False,
+                "message": "Image hiding is under development."
+            }), 501
+
+        elif payload_type == "audio":
+
+            return jsonify({
+                "success": False,
+                "message": "Audio hiding is under development."
+            }), 501
 
         if user_id and username:
             create_log(
@@ -97,7 +142,21 @@ def decode():
 
         file_size = round(os.path.getsize(image_path) / (1024 * 1024), 2)
 
-        secret_message = decode_message(image_path, password)
+        payload = decode_payload(
+            image_path=image_path,
+            password=password
+        )
+
+        if payload["type"] == "text":
+
+            secret_message = payload["data"].decode("utf-8")
+
+        else:
+
+            return jsonify({
+                "success": False,
+                "message": "Unsupported payload type."
+            }), 400
 
         if user_id and username:
             create_log(

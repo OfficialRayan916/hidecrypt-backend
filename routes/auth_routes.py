@@ -301,3 +301,73 @@ def logout():
             ),
             500,
         )
+
+
+@auth_bp.route("/users", methods=["GET"])
+def get_all_users():
+    try:
+
+        users = list(
+            users_collection.find({}, {"password": 0})  # Don't return password
+        )
+
+        user_list = []
+
+        for user in users:
+
+            user_id = str(user["_id"])
+            user["_id"] = user_id
+            user["user_id"] = user_id
+
+            image_encode = logs_collection.count_documents(
+                {"user_id": user_id, "file_type": "image", "operation": "encode"}
+            )
+
+            image_decode = logs_collection.count_documents(
+                {"user_id": user_id, "file_type": "image", "operation": "decode"}
+            )
+
+            audio_encode = logs_collection.count_documents(
+                {"user_id": user_id, "file_type": "audio", "operation": "encode"}
+            )
+
+            audio_decode = logs_collection.count_documents(
+                {"user_id": user_id, "file_type": "audio", "operation": "decode"}
+            )
+
+            video_encode = logs_collection.count_documents(
+                {"user_id": user_id, "file_type": "video", "operation": "encode"}
+            )
+
+            video_decode = logs_collection.count_documents(
+                {"user_id": user_id, "file_type": "video", "operation": "decode"}
+            )
+
+            user["image_encode"] = image_encode
+            user["image_decode"] = image_decode
+
+            user["audio_encode"] = audio_encode
+            user["audio_decode"] = audio_decode
+
+            user["video_encode"] = video_encode
+            user["video_decode"] = video_decode
+
+            last_login = auth_logs_collection.find_one(
+                {"user_id": user_id, "action": "login"}, sort=[("timestamp", -1)]
+            )
+
+            if last_login:
+                user["last_login"] = last_login["timestamp"]
+            else:
+                user["last_login"] = None
+
+            user["total_encode"] = image_encode + audio_encode + video_encode
+
+            user["total_decode"] = image_decode + audio_decode + video_decode
+
+            user_list.append(user)
+
+        return jsonify(user_list), 200
+
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500

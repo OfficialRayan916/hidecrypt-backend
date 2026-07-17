@@ -18,6 +18,7 @@ CORS(
     resources={
         r"/*": {
             "origins": [
+                "http://localhost:3000",
                 "https://hidecrypt-git-main-rayan-ahmed-s-projects1.vercel.app",
                 "https://hidecrypt-2g5ut0vjh-rayan-ahmed-s-projects1.vercel.app",
             ]
