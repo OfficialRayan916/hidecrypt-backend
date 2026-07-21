@@ -7,6 +7,7 @@ from services.image_steganography import (
 
 import os
 import uuid
+import base64
 
 image_bp = Blueprint("image", __name__)
 
@@ -86,17 +87,41 @@ def encode():
 
         elif payload_type == "image":
 
-            return jsonify({
-                "success": False,
-                "message": "Image hiding is under development."
-            }), 501
+            secret_image_name = f"{uuid.uuid4()}_{secret_image.filename}"
+
+            secret_image_path = os.path.join(
+                UPLOAD_FOLDER,
+                secret_image_name
+            )
+
+            secret_image.save(secret_image_path)
+
+            encode_payload(
+                image_path=input_path,
+                payload_type="image",
+                output_path=output_path,
+                password=password,
+                payload_path=secret_image_path
+            )
 
         elif payload_type == "audio":
 
-            return jsonify({
-                "success": False,
-                "message": "Audio hiding is under development."
-            }), 501
+             secret_audio_name = f"{uuid.uuid4()}_{secret_audio.filename}"
+
+             secret_audio_path = os.path.join(
+                 UPLOAD_FOLDER,
+                 secret_audio_name
+            )
+
+             secret_audio.save(secret_audio_path)
+
+             encode_payload(
+                 image_path=input_path,
+                 payload_type="audio",
+                 output_path=output_path,
+                 password=password,
+                 payload_path=secret_audio_path
+            )
 
         if user_id and username:
             create_log(
@@ -151,6 +176,38 @@ def decode():
 
             secret_message = payload["data"].decode("utf-8")
 
+            response = {
+                "success": True,
+                "type": "text",
+                "message": secret_message
+            }
+
+        elif payload["type"] == "image":
+
+            image_bytes = payload["data"]
+
+            image_base64 = base64.b64encode(image_bytes).decode()
+
+            response = {
+                "success": True,
+                "type": "image",
+                "extension": payload["extension"],
+                "image": image_base64
+            }
+
+        elif payload["type"] == "audio":
+
+             audio_bytes = payload["data"]
+
+             audio_base64 = base64.b64encode(audio_bytes).decode()
+
+             response = {
+                 "success": True,
+                 "type": "audio",
+                 "extension": payload["extension"],
+                 "audio": audio_base64
+            }
+
         else:
 
             return jsonify({
@@ -169,7 +226,8 @@ def decode():
                 file_size=f"{file_size} MB"
             )
 
-        return jsonify({"success": True, "message": secret_message})
+        return jsonify(response)
+        print(response)
 
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500

@@ -5,6 +5,14 @@ from moviepy import VideoFileClip
 
 from services.image_steganography import encode_message, decode_message
 
+from services.audio_steganography import (
+    create_payload,
+    read_payload,
+    generate_key
+)
+
+from cryptography.fernet import Fernet
+
 
 # =========================
 # CONVERT TO MP4
@@ -30,9 +38,31 @@ def convert_to_mp4(input_file):
 # =========================
 # ENCODE VIDEO
 # =========================
-def encode_video(input_video, secret_message, output_video, password=None):
+def encode_video(
+    input_video,
+    payload_type,
+    output_video,
+    password=None,
+    text=None,
+    payload_path=None
+):
 
     print("ENCODE 1")
+
+    payload = create_payload(
+       payload_type=payload_type,
+       payload_path=payload_path,
+       text=text
+    )
+
+    if password:
+
+        key = generate_key(password)
+
+        cipher = Fernet(key)
+
+        payload = cipher.encrypt(payload)
+ 
     input_video = convert_to_mp4(input_video)
 
     temp_dir = tempfile.mkdtemp()
@@ -54,7 +84,12 @@ def encode_video(input_video, secret_message, output_video, password=None):
 
     cv2.imwrite(frame_path, frame)
 
-    encode_message(frame_path, secret_message, encoded_frame_path, password)
+    encode_message(
+    frame_path,
+    payload.hex(),
+    encoded_frame_path,
+    None
+)
 
     encoded_frame = cv2.imread(encoded_frame_path)
 
@@ -128,6 +163,19 @@ def decode_video(input_video, password=None):
 
     cv2.imwrite(frame_path, frame)
 
-    secret_message = decode_message(frame_path, password)
+    payload_hex = decode_message(
+        frame_path,
+        None
+    )
 
-    return secret_message
+    payload = bytes.fromhex(payload_hex)
+
+    if password:
+
+        key = generate_key(password)
+
+        cipher = Fernet(key)
+
+        payload = cipher.decrypt(payload)
+
+    return read_payload(payload)

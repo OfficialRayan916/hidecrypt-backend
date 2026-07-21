@@ -1,10 +1,14 @@
 from services.log_service import create_log
 from flask import Blueprint, request, jsonify, send_file
 
-from services.video_steganography import encode_video, decode_video
+from services.video_steganography import (
+    encode_video,
+    decode_video
+)
 
 import os
 import uuid
+import base64
 
 video_bp = Blueprint("video", __name__)
 
@@ -27,6 +31,10 @@ def encode():
 
         video = request.files.get("video")
         secret_message = request.form.get("message")
+        payload_type = request.form.get("payload_type")
+
+        secret_image = request.files.get("secret_image")
+        secret_audio = request.files.get("secret_audio")
 
         user_id = request.form.get("user_id")
         username = request.form.get("username")
@@ -36,10 +44,22 @@ def encode():
         if not video:
             return jsonify({"success": False, "message": "Video file is required"}), 400
 
-        if not secret_message:
+        if payload_type == "text" and not secret_message:
             return (
-                jsonify({"success": False, "message": "Secret message is required"}),
-                400,
+                 jsonify({"success": False, "message": "Secret message is required"}),
+                 400,
+            )
+
+        if payload_type == "image" and not secret_image:
+            return (
+                 jsonify({"success": False, "message": "Secret image is required"}),
+                 400,
+            )
+
+        if payload_type == "audio" and not secret_audio:
+            return (
+                 jsonify({"success": False, "message": "Secret audio is required"}),
+                 400,
             )
 
         extension = os.path.splitext(video.filename)[1]
@@ -49,12 +69,43 @@ def encode():
         input_path = os.path.join(UPLOAD_FOLDER, filename + extension)
 
         output_path = os.path.join(ENCODED_FOLDER, filename + "_encoded.avi")
-
+ 
         video.save(input_path)
+
+        payload_path = None
+
+        if payload_type == "image":
+
+             image_name = f"{uuid.uuid4()}_{secret_image.filename}"
+
+             payload_path = os.path.join(
+                 UPLOAD_FOLDER,
+                 image_name
+             )
+
+             secret_image.save(payload_path)
+
+        elif payload_type == "audio":
+
+            audio_name = f"{uuid.uuid4()}_{secret_audio.filename}"
+
+            payload_path = os.path.join(
+                  UPLOAD_FOLDER,
+                  audio_name
+            )
+
+            secret_audio.save(payload_path)
 
         file_size = round(os.path.getsize(input_path) / (1024 * 1024), 2)
 
-        encode_video(input_path, secret_message, output_path, password)
+        encode_video(
+           input_video=input_path,
+           payload_type=payload_type,
+           output_video=output_path,
+           password=password,
+           text=secret_message,
+           payload_path=payload_path,
+        )
 
         if user_id and username:
 
@@ -111,7 +162,10 @@ def decode():
 
         file_size = round(os.path.getsize(input_path) / (1024 * 1024), 2)
 
-        secret_message = decode_video(input_path, password)
+        payload = decode_video(
+           input_path,
+           password
+        )
 
         if user_id and username:
 
@@ -125,7 +179,48 @@ def decode():
                 file_size=f"{file_size} MB",
             )
 
-        return jsonify({"success": True, "message": secret_message})
+        if payload["type"] == "text":
+
+            response = {
+                "success": True,
+                "type": "text",
+                "message": payload["data"].decode("utf-8"),
+            }
+
+        elif payload["type"] == "image":
+
+            image_base64 = base64.b64encode(
+                payload["data"]
+            ).decode()
+
+            response = {
+                "success": True,
+                "type": "image",
+                "extension": payload["extension"],
+                "image": image_base64,
+            }
+
+        elif payload["type"] == "audio":
+
+            audio_base64 = base64.b64encode(
+                payload["data"]
+            ).decode()
+
+            response = {
+                "success": True,
+                "type": "audio",
+                "extension": payload["extension"],
+                "audio": audio_base64,
+            }
+
+        else:
+
+            return jsonify({
+                "success": False,
+                "message": "Unsupported payload type"
+            }), 400
+   
+        return jsonify(response)
 
     except Exception as e:
 
