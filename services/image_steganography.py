@@ -4,12 +4,35 @@ import os
 import struct
 from cryptography.fernet import Fernet
 from PIL import Image
-from PIL import Image
+from pydub import AudioSegment
 
 
 def generate_key(password):
     key = hashlib.sha256(password.encode()).digest()
     return base64.urlsafe_b64encode(key)
+
+
+def compress_audio(input_file):
+    compressed_file = os.path.splitext(input_file)[0] + "_compressed.mp3"
+
+    audio = AudioSegment.from_file(input_file)
+
+    audio.export(compressed_file, format="mp3", bitrate="64k")
+
+    return compressed_file
+
+
+def compress_image(input_file):
+    compressed_file = os.path.splitext(input_file)[0] + "_compressed.jpg"
+
+    image = Image.open(input_file)
+
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+
+    image.save(compressed_file, "JPEG", quality=70, optimize=True)
+
+    return compressed_file
 
 
 def create_payload(payload_type, payload_path=None, text=None):
@@ -40,20 +63,34 @@ def create_payload(payload_type, payload_path=None, text=None):
         extension = "txt"
 
     elif payload_type == "image":
+        # Compress secret image before embedding
+        compressed_image = compress_image(payload_path)
 
-        extension = os.path.splitext(payload_path)[1][1:]
+        # Embedded image will be JPEG
+        extension = "jpg"
 
-        with open(payload_path, "rb") as file:
-
+        # Read compressed image bytes
+        with open(compressed_image, "rb") as file:
             payload_bytes = file.read()
+
+        # Remove temporary compressed image
+        os.remove(compressed_image)
 
     elif payload_type == "audio":
 
-        extension = os.path.splitext(payload_path)[1][1:]
+        # Compress secret audio before embedding
+        compressed_audio = compress_audio(payload_path)
 
-        with open(payload_path, "rb") as file:
+        # Embedded audio will be MP3
+        extension = "mp3"
+
+        # Read compressed audio bytes
+        with open(compressed_audio, "rb") as file:
 
             payload_bytes = file.read()
+
+        # Remove temporary compressed file
+        os.remove(compressed_audio)
 
     else:
 
@@ -115,17 +152,33 @@ def encode_bytes(image_path, payload_bytes, output_path):
     image = Image.open(image_path)
     image = image.convert("RGB")
 
-    binary_payload = "".join(format(byte, "08b") for byte in payload_bytes)
-
-    # END MARKER
-    binary_payload += "1111111111111110"
-
     pixels = image.load()
 
     width, height = image.size
+
+    # Store payload length in the first 4 bytes
+    length_header = struct.pack(">I", len(payload_bytes))
+
+    # Combine length header + actual payload
+    complete_payload = length_header + payload_bytes
+
+    # Convert payload to binary
+    binary_payload = "".join(format(byte, "08b") for byte in complete_payload)
+
+    # Calculate image capacity
     capacity = (width * height * 3) // 8
 
     print("Image Capacity:", capacity, "bytes")
+    print("Payload Size:", len(payload_bytes), "bytes")
+    print("Required Size:", len(complete_payload), "bytes")
+
+    # Check capacity before encoding
+    if len(complete_payload) > capacity:
+        raise Exception(
+            f"Payload is too large for this image. "
+            f"Required: {len(complete_payload)} bytes, "
+            f"Available: {capacity} bytes"
+        )
 
     data_index = 0
 
@@ -167,6 +220,52 @@ def decode_bytes(image_path):
 
     width, height = image.size
 
+    # First extract 32 bits = 4 bytes for payload length
+    header_bits = ""
+
+    for y in range(height):
+
+        for x in range(width):
+
+            r, g, b = pixels[x, y]
+
+            header_bits += str(r & 1)
+
+            if len(header_bits) >= 32:
+                break
+
+            header_bits += str(g & 1)
+
+            if len(header_bits) >= 32:
+                break
+
+            header_bits += str(b & 1)
+
+            if len(header_bits) >= 32:
+                break
+
+        if len(header_bits) >= 32:
+            break
+
+    # Make sure header exists
+    if len(header_bits) < 32:
+        raise Exception("No hidden payload found")
+
+    # Convert first 32 bits to payload length
+    payload_length = int(header_bits, 2)
+
+    capacity = (width * height * 3) // 8
+
+    # Validate payload length
+    if payload_length <= 0:
+        raise Exception("Invalid hidden payload")
+
+    if payload_length > capacity - 4:
+        raise Exception("Invalid or corrupted hidden payload")
+
+    # Now extract the complete payload
+    required_bits = (payload_length + 4) * 8
+
     binary_data = ""
 
     for y in range(height):
@@ -176,27 +275,34 @@ def decode_bytes(image_path):
             r, g, b = pixels[x, y]
 
             binary_data += str(r & 1)
+
+            if len(binary_data) >= required_bits:
+                break
+
             binary_data += str(g & 1)
+
+            if len(binary_data) >= required_bits:
+                break
+
             binary_data += str(b & 1)
 
-    end_marker = "1111111111111110"
+            if len(binary_data) >= required_bits:
+                break
 
-    marker_index = binary_data.find(end_marker)
+        if len(binary_data) >= required_bits:
+            break
 
-    if marker_index == -1:
-
-        raise Exception("No hidden payload found")
-
-    binary_data = binary_data[:marker_index]
+    # Remove the first 32 bits containing the payload length
+    payload_binary = binary_data[32:required_bits]
 
     payload_bytes = bytearray()
 
-    for i in range(0, len(binary_data), 8):
+    for i in range(0, len(payload_binary), 8):
 
-        byte = binary_data[i : i + 8]
+        byte = payload_binary[i : i + 8]
 
         if len(byte) < 8:
-            break
+            raise Exception("Incomplete hidden payload")
 
         payload_bytes.append(int(byte, 2))
 
@@ -254,32 +360,21 @@ def decode_payload(image_path, password=None):
     return payload_info
 
 
-#                  temporary delete it remember                  
+#                  temporary delete it remember
 
 
-def encode_message(
-    image_path,
-    secret_message,
-    output_path,
-    password=None
-):
+def encode_message(image_path, secret_message, output_path, password=None):
     return encode_payload(
         image_path=image_path,
         payload_type="text",
         output_path=output_path,
         password=password,
-        text=secret_message
+        text=secret_message,
     )
 
 
-def decode_message(
-    image_path,
-    password=None
-):
-    payload = decode_payload(
-        image_path=image_path,
-        password=password
-    )
+def decode_message(image_path, password=None):
+    payload = decode_payload(image_path=image_path, password=password)
 
     if payload["type"] != "text":
         raise Exception("Hidden payload is not text")

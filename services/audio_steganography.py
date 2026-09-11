@@ -10,27 +10,19 @@ from PIL import Image
 
 def convert_to_wav(input_file):
 
-    extension = os.path.splitext(
-        input_file
-    )[1].lower()
+    extension = os.path.splitext(input_file)[1].lower()
 
     if extension == ".wav":
         return input_file
 
-    wav_file = os.path.splitext(
-        input_file
-    )[0] + ".wav"
+    wav_file = os.path.splitext(input_file)[0] + ".wav"
 
-    audio = AudioSegment.from_file(
-        input_file
-    )
+    audio = AudioSegment.from_file(input_file)
 
-    audio.export(
-        wav_file,
-        format="wav"
-    )
+    audio.export(wav_file, format="wav")
 
     return wav_file
+
 
 def compress_audio(input_file):
 
@@ -38,11 +30,7 @@ def compress_audio(input_file):
 
     audio = AudioSegment.from_file(input_file)
 
-    audio.export(
-        compressed_file,
-        format="mp3",
-        bitrate="64k"
-    )
+    audio.export(compressed_file, format="mp3", bitrate="64k")
 
     return compressed_file
 
@@ -51,11 +39,8 @@ def generate_key(password):
     key = hashlib.sha256(password.encode()).digest()
     return base64.urlsafe_b64encode(key)
 
-def create_payload(
-    payload_type,
-    payload_path=None,
-    text=None
-):
+
+def create_payload(payload_type, payload_path=None, text=None):
 
     if payload_type == "text":
 
@@ -64,35 +49,40 @@ def create_payload(
 
     elif payload_type == "image":
 
-         temp_image = os.path.splitext(payload_path)[0] + "_compressed.jpg"
+        # Compress secret image before embedding
+        temp_image = os.path.splitext(payload_path)[0] + "_compressed.jpg"
 
-         image = Image.open(payload_path)
+        image = Image.open(payload_path)
 
-         if image.mode != "RGB":
+        # JPEG requires RGB mode
+        if image.mode != "RGB":
             image = image.convert("RGB")
 
-         image.save(
-             temp_image,
-             "JPEG",
-             quality=70,
-             optimize=True
-        )
+        # Compress image to JPEG quality 70
+        image.save(temp_image, format="JPEG", quality=70, optimize=True)
 
-         extension = "jpg"
+        extension = "jpg"
 
-         with open(temp_image, "rb") as file:
-             payload_bytes = file.read()
+        # Read compressed image bytes
+        with open(temp_image, "rb") as file:
+            payload_bytes = file.read()
 
-         os.remove(temp_image)
+        # Remove temporary compressed image
+        os.remove(temp_image)
 
     elif payload_type == "audio":
 
-     payload_path = compress_audio(payload_path)
+        # Compress secret audio before embedding
+        compressed_audio = compress_audio(payload_path)
 
-     extension = "mp3"
+        extension = "mp3"
 
-     with open(payload_path, "rb") as file:
-        payload_bytes = file.read()
+        # Read compressed audio bytes
+        with open(compressed_audio, "rb") as file:
+            payload_bytes = file.read()
+
+        # Remove temporary compressed audio file
+        os.remove(compressed_audio)
 
     else:
 
@@ -103,19 +93,16 @@ def create_payload(
     extension_bytes = extension.encode()
 
     payload = (
-
         struct.pack(">I", len(type_bytes))
         + type_bytes
-
         + struct.pack(">I", len(extension_bytes))
         + extension_bytes
-
         + struct.pack(">I", len(payload_bytes))
         + payload_bytes
-
     )
 
     return payload
+
 
 def read_payload(payload):
 
@@ -123,53 +110,41 @@ def read_payload(payload):
 
     # ---------- TYPE ----------
 
-    type_length = struct.unpack(">I", payload[index:index + 4])[0]
+    type_length = struct.unpack(">I", payload[index : index + 4])[0]
 
     index += 4
 
-    payload_type = payload[index:index + type_length].decode()
+    payload_type = payload[index : index + type_length].decode()
 
     index += type_length
 
     # ---------- EXTENSION ----------
 
-    extension_length = struct.unpack(">I", payload[index:index + 4])[0]
+    extension_length = struct.unpack(">I", payload[index : index + 4])[0]
 
     index += 4
 
-    extension = payload[index:index + extension_length].decode()
+    extension = payload[index : index + extension_length].decode()
 
     index += extension_length
 
     # ---------- DATA ----------
 
-    data_length = struct.unpack(">I", payload[index:index + 4])[0]
+    data_length = struct.unpack(">I", payload[index : index + 4])[0]
 
     index += 4
 
-    payload_bytes = payload[index:index + data_length]
+    payload_bytes = payload[index : index + data_length]
 
-    return {
+    return {"type": payload_type, "extension": extension, "data": payload_bytes}
 
-        "type": payload_type,
-        "extension": extension,
-        "data": payload_bytes
-
-    }
 
 def encode_payload(
-    input_audio,
-    payload_type,
-    output_audio,
-    password=None,
-    text=None,
-    payload_path=None
+    input_audio, payload_type, output_audio, password=None, text=None, payload_path=None
 ):
 
     payload = create_payload(
-        payload_type=payload_type,
-        payload_path=payload_path,
-        text=text
+        payload_type=payload_type, payload_path=payload_path, text=text
     )
 
     if password:
@@ -196,19 +171,14 @@ def encode_payload(
 
     payload = length_bytes + payload
 
-    binary_payload = "".join(
-        format(byte, "08b")
-        for byte in payload
-    )
+    binary_payload = "".join(format(byte, "08b") for byte in payload)
 
     if len(binary_payload) > len(frames):
         raise Exception("Payload is too large for this audio file")
 
     for i in range(len(binary_payload)):
 
-     frames[i] = (
-         frames[i] & 254
-     ) | int(binary_payload[i])
+        frames[i] = (frames[i] & 254) | int(binary_payload[i])
 
     encoded = wave.open(output_audio, "wb")
 
@@ -218,18 +188,14 @@ def encode_payload(
 
     encoded.close()
 
+
 def decode_bytes(input_audio):
 
     input_audio = convert_to_wav(input_audio)
 
-    audio = wave.open(
-        input_audio,
-        "rb"
-    )
+    audio = wave.open(input_audio, "rb")
 
-    frames = bytearray(
-        list(audio.readframes(audio.getnframes()))
-    )
+    frames = bytearray(list(audio.readframes(audio.getnframes())))
 
     audio.close()
 
@@ -243,25 +209,19 @@ def decode_bytes(input_audio):
 
     for i in range(0, len(binary_data), 8):
 
-        byte = binary_data[i:i + 8]
+        byte = binary_data[i : i + 8]
 
         if len(byte) < 8:
             break
 
-        payload_bytes.append(
-            int(byte, 2)
-        )
+        payload_bytes.append(int(byte, 2))
 
     payload_length = struct.unpack(">I", payload_bytes[:4])[0]
 
-    return bytes(
-        payload_bytes[4:4 + payload_length]
-    )
+    return bytes(payload_bytes[4 : 4 + payload_length])
 
-def decode_payload(
-    input_audio,
-    password=None
-):
+
+def decode_payload(input_audio, password=None):
 
     payload = decode_bytes(input_audio)
 
